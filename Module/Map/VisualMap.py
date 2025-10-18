@@ -26,12 +26,7 @@ class VisualMap:
                 "pose"       : AutoScalingTensor((self.init_size, 7   ), grow_on=0, dtype=torch.float32),
                 "T_BS"       : AutoScalingTensor((self.init_size, 7   ), grow_on=0, dtype=torch.float32),
                 "need_interp": AutoScalingTensor((self.init_size,     ), grow_on=0, dtype=torch.bool),
-                "time_ns"    : AutoScalingTensor((self.init_size,     ), grow_on=0, dtype=torch.long),
-                "velocity"   : AutoScalingTensor((self.init_size, 3   ), grow_on=0, dtype=torch.float32),
-                "imu_delta_p": AutoScalingTensor((self.init_size, 3   ), grow_on=0, dtype=torch.float32),
-                "imu_delta_v": AutoScalingTensor((self.init_size, 3   ), grow_on=0, dtype=torch.float32),
-                "imu_delta_q": AutoScalingTensor((self.init_size, 4   ), grow_on=0, dtype=torch.float32),
-                "imu_dt"     : AutoScalingTensor((self.init_size,     ), grow_on=0, dtype=torch.float32),
+                "time_ns"    : AutoScalingTensor((self.init_size,     ), grow_on=0, dtype=torch.long)
             }
         )
         
