@@ -1,10 +1,11 @@
 type: TartanAir_NoIMU
 name: abf001
 args:
-  root: /data/abf001_select/P001_select
+  # root: /home/arc/works/Detaset/UnderWater/TURTL/Data
   # Controls optional data sources
+  root: /home/arc/works/Detaset/UnderWater/FLSea_Sterro_canyon1
   gtDepth: false
   gtFlow: false
-  gtPose: true
+  gtPose: false
 
   compressed: true

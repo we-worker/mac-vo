@@ -83,17 +83,42 @@ class TartanAir_StereoSequence(SequenceBase[StereoFrame]):
     def __init__(self, config: SimpleNamespace | dict[str, Any]):
         cfg = self.config_dict2ns(config)
         
-        # Metadata
-        self.lcam_T_BS = pp.identity_SE3(1)
-        self.lcam_K    = torch.tensor([[320.0, 0.0, 320.0], [0.0, 320.0, 240.0], [0.0, 0.0, 1.0]]).unsqueeze(0)
-        self.baseline  = 0.25
-        self.width     = 640
-        self.height    = 480
+        # # Metadata
+        # self.lcam_T_BS = pp.identity_SE3(1)
+        # self.lcam_K    = torch.tensor([[320.0, 0.0, 320.0], [0.0, 320.0, 240.0], [0.0, 0.0, 1.0]]).unsqueeze(0)
+        # self.baseline  = 0.25
+        # self.width     = 640
+        # self.height    = 480
+        # # End
+        
+        # # Stereo Loader
+        # self.lcam_loader = TartanAirMonocularDataset(Path(cfg.root, "image_left"))
+        # self.rcam_loader = TartanAirMonocularDataset(Path(cfg.root, "image_right"))
+        
+        
+        
+        # 下面这一组时以色列红海的数据
+        self.lcam_T_BS = pp.identity_SE3(1)  # 若机体坐标系即为左相机坐标系，保持单位阵
+
+        # 左目内参（分辨率 1280x720）
+        self.lcam_K = torch.tensor(
+            [[1780.224297516428,      0.0,               714.0560429646326],
+            [0.0,                    1787.390630767771,  70.84422102673704],
+            [0.0,                    0.0,                1.0]],
+            dtype=torch.float32
+        ).unsqueeze(0)
+
+        # 基线（取 Stereo.T_c1_c2 的 x 向平移，单位从 mm 转为 m）
+        self.baseline = 0.3833217308310438  # = abs(-383.3217308310438) / 1000
+
+        # 图像尺寸（与标定一致）
+        self.width  = 1280
+        self.height = 720
         # End
         
         # Stereo Loader
-        self.lcam_loader = TartanAirMonocularDataset(Path(cfg.root, "image_left"))
-        self.rcam_loader = TartanAirMonocularDataset(Path(cfg.root, "image_right"))
+        self.lcam_loader = TartanAirMonocularDataset(Path(cfg.root, "left"))
+        self.rcam_loader = TartanAirMonocularDataset(Path(cfg.root, "right"))
 
         cam_time_file_path = Path(cfg.root, "imu", "cam_time.npy")
         if cam_time_file_path.exists():

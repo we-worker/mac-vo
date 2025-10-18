@@ -1,14 +1,17 @@
 type: GeneralStereo
 name: sequence_name_here
 args:
-  root: ${DATA_ROOT}/path/to/your/dataset/
+  root: /mnt/e/BaiduNetdiskDownload/水下数据集/第二次实验/1
 
-  # Camera Calibration
+  # 目标图像尺寸 [width, height]，设置为None则保持原始尺寸
+  target_size: [640, 480]
+
+  # Camera Calibration (原始1920x1200尺寸的内参，会自动缩放到目标尺寸)
   camera:
-    fx: 735.9240
-    fy: 735.7140
-    cx: 964.8520
-    cy: 622.2050
+    fx: 1463.28125
+    fy: 1463.28125
+    cx: 927.3199462890625
+    cy: 611.1139526367188
   
-  bl: 0.119981    # Unit: meter
+  bl: 0.12029600524902344    # Unit: meter
   format: png
