@@ -8,7 +8,12 @@ FrameFeature = T.Literal[
     "pose",         # Nx7   , dtype=float32, pose of sensor under world frame.
     "T_BS",         # Nx7   , dtype=float32, body-to-sensor SE3 transformation.
     "need_interp",  # Nx1   , dtype=bool
-    "time_ns"       # Nx1   , dtype=long
+    "time_ns",      # Nx1   , dtype=long
+    "velocity",     # Nx3   , dtype=float32
+    "imu_delta_p",  # Nx3   , dtype=float32, IMU preintegrated position
+    "imu_delta_v",  # Nx3   , dtype=float32, IMU preintegrated velocity
+    "imu_delta_q",  # Nx4   , dtype=float32, IMU preintegrated rotation (quaternion)
+    "imu_dt"        # Nx1   , dtype=float32, IMU integration time
 ]
 MatchingFeature = T.Literal[
     "pixel1_uv",    # Nx2   , dtype=float32

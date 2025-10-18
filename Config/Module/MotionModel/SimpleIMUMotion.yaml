@@ -1,0 +1,12 @@
+# Simple IMU-based motion model configuration
+# This motion model uses IMU measurements (gyroscope and accelerometer)
+# to predict pose changes between frames through forward integration.
+
+type: SimpleIMUMotion
+args:
+  # Gravity constant (m/s^2) - adjust based on dataset location
+  # Default: 9.81 (Earth standard gravity)
+  gravity: 9.81
+  
+  # Device for computation ('cpu' or 'cuda' or 'cuda:0', etc.)
+  device: cpu

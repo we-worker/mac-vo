@@ -19,6 +19,10 @@ class GraphInput:
     images_intrinsic  : torch.Tensor
     edges_index       : torch.Tensor
     device            : str
+    prev_pose         : pp.LieTensor
+    imu_delta_pose    : pp.LieTensor | None
+    imu_weight_rot    : float
+    imu_weight_trans  : float
 
 
 @dataclass
