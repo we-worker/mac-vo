@@ -4,11 +4,13 @@ This document describes the simple and clean IMU fusion scheme implemented for M
 
 ## Overview
 
-The IMU fusion implementation provides two main components:
+The IMU fusion implementation provides three main components:
 
 1. **SimpleIMUIntegrator**: A forward integration module that integrates IMU measurements (gyroscope and accelerometer) to estimate pose, velocity, and position changes.
 
 2. **IMUPreintegrator**: A preintegration module for efficient multi-frame optimization, useful for factor graph-based approaches.
+
+3. **IMUVisualFusion**: A motion model that fuses IMU predictions with visual odometry for robust, drift-corrected pose estimation.
 
 ## Architecture
 
@@ -75,6 +77,62 @@ args:
 3. Integrates IMU data from previous pose to predict current pose
 4. Can be updated with optimized poses via the `update()` method
 
+### IMUVisualFusion
+
+Also in `Module/MotionModel.py`, this motion model **fuses IMU and visual information** for robust pose estimation:
+
+```python
+motion_model = IMUVisualFusion(config)
+predicted_pose = motion_model.predict(stereo_inertial_frame, flow, depth)
+```
+
+**Configuration:**
+```yaml
+type: IMUVisualFusion
+args:
+  gravity: 9.81        # Gravity constant in m/s^2
+  device: cpu          # Device for computation
+  imu_weight: 0.3      # Weight for IMU prediction (0.0 to 1.0)
+  visual_weight: 0.7   # Weight for visual prediction (0.0 to 1.0)
+  forward_scale: 0.5   # Scaling for forward motion from flow
+  use_visual: true     # Enable/disable visual component
+```
+
+**Fusion Strategy:**
+
+The `IMUVisualFusion` model implements a complementary fusion approach:
+
+1. **IMU Prediction**: 
+   - Integrates gyroscope and accelerometer data
+   - Provides high-rate (100-200 Hz) pose updates
+   - Subject to drift over time but excellent short-term accuracy
+
+2. **Visual Prediction**:
+   - Estimates motion from optical flow and depth
+   - Provides drift-free observations at camera frame rate (~30 Hz)
+   - Can be less accurate in low-texture or fast-motion scenarios
+
+3. **Weighted Fusion**:
+   - Combines both predictions using normalized weights
+   - Position: `fused_pos = imu_weight * imu_pos + visual_weight * visual_pos`
+   - Rotation: Quaternion SLERP-like interpolation
+   - Automatically normalizes weights to sum to 1.0
+
+**Key Features:**
+
+- **Complementary Strengths**: IMU provides high-rate prediction, visual corrects drift
+- **Graceful Degradation**: Falls back to IMU-only if visual estimation fails
+- **Configurable Weighting**: Adjust fusion weights based on sensor quality
+- **Clean Architecture**: Separate prediction methods for each modality
+- **Robust Error Handling**: Comprehensive checks for malformed data
+
+**When to Use:**
+
+- **IMU-Only** (`SimpleIMUMotion`): Short sequences, high IMU quality, no visual data
+- **IMU-Visual Fusion** (`IMUVisualFusion`): General use case, balances both modalities
+- **Visual-Heavy Fusion** (high `visual_weight`): Low-quality IMU, good visual features
+- **IMU-Heavy Fusion** (high `imu_weight`): High-rate motion, poor lighting
+
 ## Usage Examples
 
 ### Basic Usage
@@ -106,6 +164,8 @@ final_rot, final_vel, final_pos = integrator.integrate(
 
 ### Using with MAC-VO
 
+#### Option 1: IMU-Only Motion Model
+
 1. **Configure the motion model** in your experiment YAML:
 
 ```yaml
@@ -124,7 +184,50 @@ Data:
     gt_pose: true
 ```
 
-3. **Run the system** - The motion model will automatically use IMU data when available.
+3. **Run the system**:
+
+```bash
+python MACVO.py --odom your_config.yaml --data Config/Sequence/EuRoC_MH01.yaml
+```
+
+#### Option 2: IMU-Visual Fusion (Recommended)
+
+1. **Configure the fusion motion model**:
+
+```yaml
+Odometry:
+  motion:
+    !include Config/Module/MotionModel/IMUVisualFusion.yaml
+```
+
+Or inline configuration:
+
+```yaml
+Odometry:
+  motion:
+    type: IMUVisualFusion
+    args:
+      gravity: 9.81
+      device: cpu
+      imu_weight: 0.3      # Trust IMU 30%
+      visual_weight: 0.7   # Trust visual 70%
+      forward_scale: 0.5   # Scale factor for forward motion
+      use_visual: true     # Enable visual component
+```
+
+2. **Use the provided example config**:
+
+```bash
+python MACVO.py \
+  --odom Config/Experiment/MACVO/MACVO_IMUVisualFusion_Example.yaml \
+  --data Config/Sequence/EuRoC_MH01.yaml \
+  --useRR  # Optional: enable Rerun visualization
+```
+
+3. **Tune fusion weights** based on your sensors:
+   - High-quality IMU, poor lighting → increase `imu_weight` (e.g., 0.6)
+   - Consumer IMU, good features → increase `visual_weight` (e.g., 0.8)
+   - Balanced scenario → keep default (0.3/0.7)
 
 ## Design Principles
 
