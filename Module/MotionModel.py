@@ -11,6 +11,7 @@ from Utility.Extensions import ConfigTestableSubclass,TensorQueue
 from Utility.PrettyPrint import Logger
 from DataLoader import StereoFrame, StereoInertialFrame, T_Data
 from Utility.Timer import Timer
+from .IMUIntegration import SimpleIMUIntegrator
 
 
 class IMotionModel(ABC, Generic[T_Data], ConfigTestableSubclass):
@@ -201,3 +202,90 @@ class ReadPoseFile(IMotionModel[StereoFrame]):
         cls._enforce_config_spec(config, {
             "pose_file": lambda s: isinstance(s, str)
         })
+
+
+class SimpleIMUMotion(IMotionModel[StereoInertialFrame]):
+    """
+    A simple IMU-based motion model that integrates IMU measurements
+    to predict pose changes between frames.
+    """
+    
+    def __init__(self, config: SimpleNamespace):
+        super().__init__(config)
+        self.prev_pose: pp.LieTensor | None = None
+        self.prev_velocity: torch.Tensor | None = None
+        gravity = getattr(self.config, "gravity", 9.81)
+        device_str = getattr(self.config, "device", "cpu")
+        self.integrator = SimpleIMUIntegrator(gravity=gravity)
+        self.device = torch.device(device_str)
+        self.device_str = device_str
+        self.dtype = torch.float32
+    
+    def predict(self, frame: StereoInertialFrame, flow: torch.Tensor | None, depth: torch.Tensor | None) -> pp.LieTensor:
+        if self.prev_pose is None:
+            self.prev_pose = pp.identity_SE3(device=self.device_str, dtype=self.dtype)
+            self.prev_velocity = torch.zeros(3, device=self.device, dtype=self.dtype)
+            return pp.identity_SE3(device=self.device_str, dtype=self.dtype)
+        
+        imu_data = frame.imu
+        gyro = imu_data.gyro
+        acc = imu_data.acc
+        if gyro.numel() == 0 or acc.numel() == 0:
+            Logger.write("warn", "No IMU measurements available, using previous pose")
+            return self.prev_pose
+        
+        gyro = gyro.squeeze(0).to(device=self.device, dtype=self.dtype)
+        acc = acc.squeeze(0).to(device=self.device, dtype=self.dtype)
+        if gyro.ndim == 0 or acc.ndim == 0:
+            Logger.write("warn", "IMU measurements malformed, using previous pose")
+            return self.prev_pose
+        
+        time_delta = imu_data.time_delta.squeeze(0).float()
+        if time_delta.ndim == 0:
+            time_delta = time_delta.unsqueeze(0)
+        if time_delta.ndim == 2:
+            time_delta = time_delta.squeeze(-1)
+        time_delta = (time_delta / 1e9).to(device=self.device, dtype=self.dtype)
+        if time_delta.numel() == 0:
+            Logger.write("warn", "IMU time deltas unavailable, using previous pose")
+            return self.prev_pose
+        
+        steps = min(time_delta.numel(), gyro.shape[0])
+        if steps == 0:
+            Logger.write("warn", "Insufficient IMU samples, using previous pose")
+            return self.prev_pose
+        gyro = gyro[:steps]
+        acc = acc[:steps]
+        time_delta = time_delta[:steps]
+        
+        prev_rot = self.prev_pose.to(device=self.device, dtype=self.dtype).rotation()
+        prev_pos = self.prev_pose.translation().to(device=self.device, dtype=self.dtype).reshape(-1)
+        init_vel = self.prev_velocity if self.prev_velocity is not None else torch.zeros(3, device=self.device, dtype=self.dtype)
+        
+        final_rot, final_vel, final_pos = self.integrator.integrate(
+            prev_rot, init_vel, prev_pos, gyro, acc, time_delta
+        )
+        
+        self.prev_velocity = final_vel.clone()
+        pose_tensor = torch.cat([final_pos, final_rot.tensor()], dim=0)
+        new_pose = pp.SE3(pose_tensor)
+        self.prev_pose = new_pose
+        
+        return new_pose
+    
+    def update(self, pose: pp.LieTensor) -> None:
+        self.prev_pose = pose.to(self.device, dtype=self.dtype)
+        if self.prev_velocity is not None:
+            self.prev_velocity = self.prev_velocity.to(device=self.device, dtype=self.dtype)
+    
+    @classmethod
+    def is_valid_config(cls, config: SimpleNamespace | None) -> None:
+        if config is None:
+            return
+        gravity = getattr(config, "gravity", 9.81)
+        device = getattr(config, "device", "cpu")
+        
+        if not isinstance(gravity, (int, float)) or gravity <= 0:
+            raise ValueError("gravity must be a positive number")
+        if not isinstance(device, str):
+            raise ValueError("device must be a string")
