@@ -548,3 +548,169 @@ class IMUVisualFusion(IMotionModel[StereoInertialFrame]):
         total_weight = imu_weight + visual_weight
         if abs(total_weight - 1.0) > 0.01:
             Logger.write("warn", f"IMU and visual weights sum to {total_weight:.3f}, not 1.0. Weights will be normalized.")
+
+
+class IMUPreintegrationMotion(IMotionModel[StereoInertialFrame]):
+    """
+    IMU-based motion model using preintegration.
+    
+    This motion model stores IMU measurements for later use in graph optimization,
+    providing a cleaner separation between motion prediction and optimization.
+    
+    Unlike IMUVisualFusion which uses weighted averaging, this model:
+    1. Predicts pose using pure IMU integration
+    2. Stores preintegration data for graph optimization
+    3. Allows the backend optimizer to fuse IMU and visual constraints
+    """
+    
+    def __init__(self, config: SimpleNamespace):
+        super().__init__(config)
+        self.prev_pose: pp.LieTensor | None = None
+        self.prev_velocity: torch.Tensor | None = None
+        
+        gravity = getattr(self.config, "gravity", 9.81)
+        device_str = getattr(self.config, "device", "cpu")
+        self.integrator = SimpleIMUIntegrator(gravity=gravity)
+        self.device = torch.device(device_str)
+        self.device_str = device_str
+        self.dtype = torch.float32
+        
+        self.imu_buffer: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = []
+        self.last_frame_time: int | None = None
+        
+        Logger.write("info", "IMUPreintegrationMotion initialized for graph optimization")
+    
+    def predict(self, frame: StereoInertialFrame, flow: torch.Tensor | None, depth: torch.Tensor | None) -> pp.LieTensor:
+        """
+        Predict pose using IMU integration and store measurements for optimization.
+        
+        Args:
+            frame: Stereo-inertial frame with IMU data
+            flow: Optical flow (not used in pure IMU prediction)
+            depth: Depth map (not used in pure IMU prediction)
+            
+        Returns:
+            Predicted pose based on IMU integration
+        """
+        if self.prev_pose is None:
+            self.prev_pose = pp.identity_SE3(device=self.device_str, dtype=self.dtype)
+            self.prev_velocity = torch.zeros(3, device=self.device, dtype=self.dtype)
+            self.last_frame_time = frame.stereo.frame_ns
+            return pp.identity_SE3(device=self.device_str, dtype=self.dtype)
+        
+        imu_data = frame.imu
+        gyro = imu_data.gyro
+        acc = imu_data.acc
+        
+        if gyro.numel() == 0 or acc.numel() == 0:
+            Logger.write("warn", "No IMU measurements, using previous pose")
+            return self.prev_pose
+        
+        gyro = gyro.squeeze(0).to(device=self.device, dtype=self.dtype)
+        acc = acc.squeeze(0).to(device=self.device, dtype=self.dtype)
+        
+        if gyro.ndim == 0 or acc.ndim == 0:
+            Logger.write("warn", "IMU measurements malformed")
+            return self.prev_pose
+        
+        time_delta = imu_data.time_delta.squeeze(0).float()
+        if time_delta.ndim == 0:
+            time_delta = time_delta.unsqueeze(0)
+        if time_delta.ndim == 2:
+            time_delta = time_delta.squeeze(-1)
+        time_delta = (time_delta / 1e9).to(device=self.device, dtype=self.dtype)
+        
+        if time_delta.numel() == 0:
+            Logger.write("warn", "IMU time deltas unavailable")
+            return self.prev_pose
+        
+        steps = min(time_delta.numel(), gyro.shape[0])
+        if steps == 0:
+            Logger.write("warn", "Insufficient IMU samples")
+            return self.prev_pose
+        
+        gyro = gyro[:steps]
+        acc = acc[:steps]
+        time_delta = time_delta[:steps]
+        
+        self.imu_buffer.append((gyro.clone(), acc.clone(), time_delta.clone()))
+        
+        prev_rot = self.prev_pose.to(device=self.device, dtype=self.dtype).rotation()
+        prev_pos = self.prev_pose.translation().to(device=self.device, dtype=self.dtype).reshape(-1)
+        init_vel = self.prev_velocity if self.prev_velocity is not None else torch.zeros(3, device=self.device, dtype=self.dtype)
+        
+        final_rot, final_vel, final_pos = self.integrator.integrate(
+            prev_rot, init_vel, prev_pos, gyro, acc, time_delta
+        )
+        
+        self.prev_velocity = final_vel.clone()
+        pose_tensor = torch.cat([final_pos, final_rot.tensor()], dim=0)
+        new_pose = pp.SE3(pose_tensor)
+        self.prev_pose = new_pose
+        self.last_frame_time = frame.stereo.frame_ns
+        
+        return new_pose
+    
+    def update(self, pose: pp.LieTensor) -> None:
+        """
+        Update with optimized pose from backend.
+        
+        Args:
+            pose: Optimized pose from graph optimization
+        """
+        self.prev_pose = pose.to(self.device, dtype=self.dtype)
+        if self.prev_velocity is not None:
+            self.prev_velocity = self.prev_velocity.to(device=self.device, dtype=self.dtype)
+    
+    def get_preintegration_data(self) -> list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+        """
+        Get stored IMU measurements for graph optimization.
+        
+        Returns:
+            List of (gyro, acc, dt) tuples
+        """
+        return self.imu_buffer
+    
+    def get_latest_preintegration(self) -> dict[str, torch.Tensor] | None:
+        """
+        Compute preintegrated IMU measurements for the latest interval.
+        
+        Returns:
+            Dictionary containing preintegrated rotation (quat), velocity, position, and dt.
+        """
+        if not self.imu_buffer:
+            return None
+        gyro, acc, dt = self.imu_buffer[-1]
+        device = gyro.device
+        dtype = gyro.dtype
+        init_rot = pp.SO3(torch.tensor([1.0, 0.0, 0.0, 0.0], device=device, dtype=dtype))
+        init_vel = torch.zeros(3, device=device, dtype=dtype)
+        init_pos = torch.zeros(3, device=device, dtype=dtype)
+        
+        delta_rot, delta_vel, delta_pos = self.integrator.integrate(
+            init_rot, init_vel, init_pos, gyro, acc, dt
+        )
+        
+        return {
+            "delta_q": delta_rot.tensor(),
+            "delta_v": delta_vel,
+            "delta_p": delta_pos,
+            "dt": dt.sum()
+        }
+    
+    def clear_buffer(self):
+        """Clear IMU measurement buffer after optimization."""
+        self.imu_buffer.clear()
+    
+    @classmethod
+    def is_valid_config(cls, config: SimpleNamespace | None) -> None:
+        if config is None:
+            return
+        
+        gravity = getattr(config, "gravity", 9.81)
+        device = getattr(config, "device", "cpu")
+        
+        if not isinstance(gravity, (int, float)) or gravity <= 0:
+            raise ValueError("gravity must be a positive number")
+        if not isinstance(device, str):
+            raise ValueError("device must be a string")

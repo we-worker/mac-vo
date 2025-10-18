@@ -4,13 +4,27 @@ This document describes the simple and clean IMU fusion scheme implemented for M
 
 ## Overview
 
-The IMU fusion implementation provides three main components:
+The IMU fusion implementation provides multiple components for different fusion strategies:
+
+### Core IMU Integration Modules
 
 1. **SimpleIMUIntegrator**: A forward integration module that integrates IMU measurements (gyroscope and accelerometer) to estimate pose, velocity, and position changes.
 
 2. **IMUPreintegrator**: A preintegration module for efficient multi-frame optimization, useful for factor graph-based approaches.
 
-3. **IMUVisualFusion**: A motion model that fuses IMU predictions with visual odometry for robust, drift-corrected pose estimation.
+### Motion Models (Frontend Prediction)
+
+3. **SimpleIMUMotion**: Pure IMU integration for motion prediction (IMU-only).
+
+4. **IMUVisualFusion**: Weighted averaging of IMU and visual predictions (简单的加权平均融合).
+
+5. **IMUPreintegrationMotion**: IMU integration with preintegration storage for backend optimization (基于图优化的预积分方法，推荐).
+
+### Graph Optimization Components (Backend Fusion)
+
+6. **IMUFactor_Graph**: IMU preintegration factor for pose graph optimization.
+
+7. **Analytic_IMUFactor_Graph**: Analytical Jacobian version for faster optimization.
 
 ## Architecture
 

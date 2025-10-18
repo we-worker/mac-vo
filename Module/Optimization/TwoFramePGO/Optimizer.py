@@ -35,7 +35,39 @@ class TwoFrame_PGO(IOptimizer[GraphInput, dict, GraphOutput]):
         edges_idx = torch.repeat_interleave(torch.arange(lengths.size(0)), lengths.long())
         init_motion = pp.SE3(frame2opt.data["pose"])
         baseline = frame2opt.data["baseline"]
-        return GraphInput(frame_idx, frame_idx - 1, init_motion, baseline, obs, pts, im_intrinsics, edges_idx, "cpu")
+
+        prev_idx = frame_idx - 1
+        prev_pose = pp.SE3(global_map.frames.data["pose"][prev_idx])
+
+        imu_dt = frame2opt.data["imu_dt"]
+        if imu_dt.numel() > 0 and float(imu_dt[0].item()) > 0.0:
+            delta_p = frame2opt.data["imu_delta_p"]
+            delta_q = frame2opt.data["imu_delta_q"]
+            imu_delta_pose = pp.SE3(torch.cat([delta_p, delta_q], dim=-1))
+        else:
+            imu_delta_pose = None
+
+        imu_weight_rot = 1.0
+        imu_weight_trans = 1.0
+        if hasattr(self, "config"):
+            imu_weight_rot = getattr(self.config, "imu_weight_rot", 1.0)
+            imu_weight_trans = getattr(self.config, "imu_weight_trans", 1.0)
+
+        return GraphInput(
+            frame_idx,
+            frame_idx - 1,
+            init_motion,
+            baseline,
+            obs,
+            pts,
+            im_intrinsics,
+            edges_idx,
+            "cpu",
+            prev_pose,
+            imu_delta_pose,
+            float(imu_weight_rot),
+            float(imu_weight_trans),
+        )
 
     @classmethod
     def is_valid_config(cls, config: SimpleNamespace | None) -> None:
