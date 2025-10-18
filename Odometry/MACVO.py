@@ -159,17 +159,6 @@ class MACVO(IOdometry[T_SensorFrame], ConfigTestable):
         depth0          = self.Frontend.estimate_depth(frame0.stereo)
         est_pose        = self.MotionEstimator.predict(frame0, None, depth0.depth).unsqueeze(0)
         
-        velocity0 = getattr(self.MotionEstimator, "prev_velocity", torch.zeros(3))
-        if isinstance(velocity0, torch.Tensor):
-            velocity0 = velocity0.reshape(1, 3).to(dtype=torch.float32)
-        else:
-            velocity0 = torch.zeros(1, 3, dtype=torch.float32)
-        
-        imu_delta_p = torch.zeros(1, 3, dtype=torch.float32)
-        imu_delta_v = torch.zeros(1, 3, dtype=torch.float32)
-        imu_delta_q = torch.tensor([[1.0, 0.0, 0.0, 0.0]], dtype=torch.float32)
-        imu_dt = torch.zeros(1, dtype=torch.float32)
-
         frame_idx = self.graph.frames.push(FrameNode.init({
             "pose"        : est_pose,
             "T_BS"        : frame0.stereo.T_BS,
@@ -177,11 +166,6 @@ class MACVO(IOdometry[T_SensorFrame], ConfigTestable):
             "time_ns"     : torch.tensor([frame0.stereo.frame_ns], dtype=torch.long),
             "K"           : frame0.stereo.K,
             "baseline"    : frame0.stereo.baseline,
-            "velocity"    : velocity0,
-            "imu_delta_p" : imu_delta_p,
-            "imu_delta_v" : imu_delta_v,
-            "imu_delta_q" : imu_delta_q,
-            "imu_dt"      : imu_dt,
         }))
         self.OutlierFilter.set_meta(frame0.stereo)
         self.prev_keyframe = (frame0, int(frame_idx.item()), depth0)
@@ -191,8 +175,7 @@ class MACVO(IOdometry[T_SensorFrame], ConfigTestable):
         
         # Check if current frame is the keyframe ########################################
         if not self.KeyframeSelector.isKeyframe(frame1):            
-            imu_preint = getattr(self.MotionEstimator, "get_latest_preintegration", lambda: None)()
-            self.push_keyframe(frame1, self.graph.frames.data["pose"][self.prev_keyframe[1]].unsqueeze(0), need_interp=True, imu_preint=imu_preint)
+            self.push_keyframe(frame1, self.graph.frames.data["pose"][self.prev_keyframe[1]].unsqueeze(0), need_interp=True)
             return
         
         depth0          = self.prev_keyframe[2]
@@ -296,9 +279,7 @@ class MACVO(IOdometry[T_SensorFrame], ConfigTestable):
             "cov_Tw": torch.bmm(torch.bmm(prev_rot, pos0_covTc), prev_rot.transpose(1, 2)),
             "color" : kp0_color
         })[mask])
-        
-        imu_preint = getattr(self.MotionEstimator, "get_latest_preintegration", lambda: None)()
-        frame_idx      = self.push_keyframe(frame1, est_pose, imu_preint=imu_preint)
+        frame_idx      = self.push_keyframe(frame1, est_pose)
         prev_frame_idx = torch.tensor([self.prev_keyframe[1]], dtype=torch.long)
         match_idx      = self.graph.match.push(match_obs)
         
@@ -355,30 +336,7 @@ class MACVO(IOdometry[T_SensorFrame], ConfigTestable):
             }))
             self.graph.frame2map.add(frame_idx, torch.tensor([num_map_orig], dtype=torch.long), torch.tensor([num_mappoint], dtype=torch.long))   # Associate frame -> map
 
-    def push_keyframe(
-        self,
-        frame: T_SensorFrame,
-        est_pose: pp.LieTensor | torch.Tensor,
-        need_interp: bool=False,
-        imu_preint: dict[str, torch.Tensor] | None = None,
-    ) -> torch.Tensor:
-        velocity = getattr(self.MotionEstimator, "prev_velocity", torch.zeros(3))
-        if isinstance(velocity, torch.Tensor):
-            velocity = velocity.reshape(1, 3).to(dtype=torch.float32)
-        else:
-            velocity = torch.zeros(1, 3, dtype=torch.float32)
-        
-        if imu_preint is not None:
-            delta_p = imu_preint.get("delta_p", torch.zeros(3)).reshape(1, 3).to(dtype=torch.float32)
-            delta_v = imu_preint.get("delta_v", torch.zeros(3)).reshape(1, 3).to(dtype=torch.float32)
-            delta_q = imu_preint.get("delta_q", torch.tensor([1.0, 0.0, 0.0, 0.0])).reshape(1, 4).to(dtype=torch.float32)
-            delta_t = imu_preint.get("dt", torch.tensor(0.0)).reshape(1).to(dtype=torch.float32)
-        else:
-            delta_p = torch.zeros(1, 3, dtype=torch.float32)
-            delta_v = torch.zeros(1, 3, dtype=torch.float32)
-            delta_q = torch.tensor([[1.0, 0.0, 0.0, 0.0]], dtype=torch.float32)
-            delta_t = torch.zeros(1, dtype=torch.float32)
-        
+    def push_keyframe(self, frame: T_SensorFrame, est_pose: pp.LieTensor | torch.Tensor, need_interp: bool=False) -> torch.Tensor:
         frame_idx = self.graph.frames.push(FrameNode.init({
             "pose"        : est_pose,
             "T_BS"        : frame.stereo.T_BS,
@@ -386,11 +344,6 @@ class MACVO(IOdometry[T_SensorFrame], ConfigTestable):
             "time_ns"     : torch.tensor([frame.stereo.frame_ns], dtype=torch.long),
             "K"           : frame.stereo.K,
             "baseline"    : frame.stereo.baseline,
-            "velocity"    : velocity,
-            "imu_delta_p" : delta_p,
-            "imu_delta_v" : delta_v,
-            "imu_delta_q" : delta_q,
-            "imu_dt"      : delta_t,
         }))
         return frame_idx
 
