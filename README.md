@@ -198,6 +198,29 @@ We used [the Rerun](https://rerun.io) visualizer to visualize 3D space including
       ```
   5. To accumulate the point cloud for dense mapping visualization, please follow the instruction here: https://github.com/MAC-VO/MAC-VO/issues/4#issuecomment-2495620352
 
+### 📷 3D Trajectory Visualization (Web-based)
+
+For interactive web-based trajectory analysis and visualization, use our browser-based tool:
+
+1. **Export trajectory data from experiment results:**
+   ```bash
+   $ python Visualization/export_trajectory.py --sandbox [SANDBOX_PATH] --output trajectory.txt
+   ```
+
+2. **Open the visualization tool:**
+   - Open `Visualization/camera_trajectory_3d.html` in your web browser
+   - Click "Choose File" and load your trajectory data (`.txt` or `.npy`)
+   - Interact with the 3D view using mouse controls (rotate, pan, zoom)
+
+**Features:**
+- Interactive 3D camera trajectory visualization
+- Distance calculation (total and range-specific)
+- Frame-by-frame playback with speed control
+- Real-time pose information display
+- Support for both `.txt` and `.npy` formats
+
+For detailed documentation, see [`Visualization/README.md`](Visualization/README.md)
+
 ### 📈 Baseline Methods
 
 We also integrated two baseline methods (DPVO, TartanVO Stereo) into the codebase for evaluation, visualization and comparison.
