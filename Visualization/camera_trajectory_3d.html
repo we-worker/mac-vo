@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Trajectory 3D Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #canvas-container {
+            flex: 1;
+            position: relative;
+        }
+
+        #control-panel {
+            width: 350px;
+            background: #2d2d2d;
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #4fc3f7;
+            border-bottom: 2px solid #4fc3f7;
+            padding-bottom: 10px;
+        }
+
+        .section {
+            margin-bottom: 25px;
+            background: #353535;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .section h2 {
+            font-size: 16px;
+            margin-bottom: 12px;
+            color: #81c784;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-button {
+            display: block;
+            padding: 10px 15px;
+            background: #4fc3f7;
+            color: #1a1a1a;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .file-input-button:hover {
+            background: #29b6f6;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 13px;
+            color: #b0b0b0;
+        }
+
+        input[type="number"], input[type="range"] {
+            width: 100%;
+            padding: 8px;
+            background: #424242;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #e0e0e0;
+            margin-bottom: 10px;
+        }
+
+        input[type="range"] {
+            padding: 0;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 5px 5px 5px 0;
+            background: #66bb6a;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #4caf50;
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .info-box {
+            background: #424242;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            margin-top: 10px;
+            line-height: 1.6;
+        }
+
+        .info-box .label {
+            color: #81c784;
+            font-weight: bold;
+        }
+
+        .info-box .value {
+            color: #e0e0e0;
+            float: right;
+        }
+
+        .info-row {
+            clear: both;
+            margin-bottom: 5px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .button-group button {
+            flex: 1;
+            margin: 0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #424242;
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4fc3f7;
+            width: 0%;
+            transition: width 0.1s linear;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 10px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .spinner {
+            border: 4px solid #424242;
+            border-top: 4px solid #4fc3f7;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #d32f2f;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        #file-info {
+            font-size: 12px;
+            color: #81c784;
+            margin-top: 5px;
+            word-break: break-all;
+        }
+
+        .range-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .range-input-group input[type="number"] {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .speed-control label {
+            margin: 0;
+            min-width: 50px;
+        }
+
+        .speed-control input[type="range"] {
+            flex: 1;
+            margin: 0;
+        }
+
+        .speed-control .value {
+            min-width: 35px;
+            text-align: right;
+            color: #4fc3f7;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container">
+            <div id="loading">
+                <div class="spinner"></div>
+                <div>Loading...</div>
+            </div>
+        </div>
+        <div id="control-panel">
+            <h1>📷 Camera Trajectory 3D</h1>
+            
+            <div class="section">
+                <h2>📁 Load Data</h2>
+                <div class="file-input-wrapper">
+                    <input type="file" id="file-input" accept=".txt,.npy">
+                    <label for="file-input" class="file-input-button">Choose File</label>
+                </div>
+                <div id="file-info"></div>
+                <div id="error-message" class="error-message"></div>
+            </div>
+
+            <div class="section">
+                <h2>📊 Trajectory Info</h2>
+                <div class="info-box">
+                    <div class="info-row">
+                        <span class="label">Total Frames:</span>
+                        <span class="value" id="total-frames">0</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Total Distance:</span>
+                        <span class="value" id="total-distance">0.00 m</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Range Distance:</span>
+                        <span class="value" id="range-distance">0.00 m</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🎬 Frame Range</h2>
+                <label>Start Frame:</label>
+                <input type="number" id="start-frame" value="0" min="0">
+                
+                <label>End Frame:</label>
+                <input type="number" id="end-frame" value="0" min="0">
+                
+                <button id="apply-range">Apply Range</button>
+            </div>
+
+            <div class="section">
+                <h2>▶️ Playback Control</h2>
+                <div class="button-group">
+                    <button id="play-btn" disabled>▶ Play</button>
+                    <button id="pause-btn" disabled>⏸ Pause</button>
+                    <button id="reset-btn" disabled>↺ Reset</button>
+                </div>
+
+                <label>Current Frame: <span id="current-frame-display">0</span></label>
+                <input type="range" id="frame-slider" min="0" max="0" value="0" disabled>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+
+                <div class="speed-control">
+                    <label>Speed:</label>
+                    <input type="range" id="speed-slider" min="1" max="100" value="30">
+                    <span class="value" id="speed-value">30</span>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>📍 Current Pose</h2>
+                <div class="info-box" id="current-pose-info">
+                    <div class="info-row">
+                        <span class="label">Frame ID:</span>
+                        <span class="value" id="pose-frame">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Position X:</span>
+                        <span class="value" id="pose-x">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Position Y:</span>
+                        <span class="value" id="pose-y">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Position Z:</span>
+                        <span class="value" id="pose-z">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Quat W:</span>
+                        <span class="value" id="pose-qw">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Quat X:</span>
+                        <span class="value" id="pose-qx">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Quat Y:</span>
+                        <span class="value" id="pose-qy">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="label">Quat Z:</span>
+                        <span class="value" id="pose-qz">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <h2>🎨 View Options</h2>
+                <div class="button-group">
+                    <button id="show-cameras">📷 Cameras</button>
+                    <button id="show-axes">📐 Axes</button>
+                </div>
+                <button id="reset-view">🔄 Reset View</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script>
+        class TrajectoryData {
+            constructor() {
+                this.poses = [];
+                this.frameIds = [];
+                this.rigIds = [];
+            }
+
+            clear() {
+                this.poses = [];
+                this.frameIds = [];
+                this.rigIds = [];
+            }
+
+            addPose(frameId, rigId, tx, ty, tz, qx, qy, qz, qw) {
+                this.frameIds.push(frameId);
+                this.rigIds.push(rigId);
+                this.poses.push({
+                    position: new THREE.Vector3(tx, ty, tz),
+                    quaternion: new THREE.Quaternion(qx, qy, qz, qw)
+                });
+            }
+
+            get length() {
+                return this.poses.length;
+            }
+
+            getPose(index) {
+                if (index < 0 || index >= this.length) return null;
+                return {
+                    frameId: this.frameIds[index],
+                    rigId: this.rigIds[index],
+                    ...this.poses[index]
+                };
+            }
+
+            calculateTotalDistance() {
+                let distance = 0;
+                for (let i = 1; i < this.poses.length; i++) {
+                    distance += this.poses[i].position.distanceTo(this.poses[i-1].position);
+                }
+                return distance;
+            }
+
+            calculateRangeDistance(startIdx, endIdx) {
+                let distance = 0;
+                const start = Math.max(0, startIdx);
+                const end = Math.min(this.poses.length - 1, endIdx);
+                for (let i = start + 1; i <= end; i++) {
+                    distance += this.poses[i].position.distanceTo(this.poses[i-1].position);
+                }
+                return distance;
+            }
+        }
+
+        class TrajectoryVisualizer {
+            constructor(container) {
+                this.container = container;
+                this.data = new TrajectoryData();
+                this.currentFrame = 0;
+                this.playing = false;
+                this.playSpeed = 30;
+                this.startFrame = 0;
+                this.endFrame = 0;
+                this.showCameras = true;
+                this.showAxes = true;
+
+                this.initScene();
+                this.initLights();
+                this.initControls();
+                this.animate();
+            }
+
+            initScene() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x1a1a1a);
+
+                this.camera = new THREE.PerspectiveCamera(
+                    60,
+                    this.container.clientWidth / this.container.clientHeight,
+                    0.1,
+                    10000
+                );
+                this.camera.position.set(10, 10, 10);
+                this.camera.lookAt(0, 0, 0);
+
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+                this.container.appendChild(this.renderer.domElement);
+
+                window.addEventListener('resize', () => this.onWindowResize());
+
+                const gridHelper = new THREE.GridHelper(100, 100, 0x444444, 0x222222);
+                this.scene.add(gridHelper);
+
+                this.axesHelper = new THREE.AxesHelper(5);
+                this.scene.add(this.axesHelper);
+            }
+
+            initLights() {
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambientLight);
+
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
+                directionalLight.position.set(10, 10, 10);
+                this.scene.add(directionalLight);
+            }
+
+            initControls() {
+                this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+                this.controls.enableDamping = true;
+                this.controls.dampingFactor = 0.05;
+                this.controls.screenSpacePanning = true;
+                this.controls.minDistance = 1;
+                this.controls.maxDistance = 1000;
+            }
+
+            onWindowResize() {
+                this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+            }
+
+            clearTrajectory() {
+                if (this.trajectoryLine) {
+                    this.scene.remove(this.trajectoryLine);
+                    this.trajectoryLine = null;
+                }
+                if (this.cameraMarkers) {
+                    this.cameraMarkers.forEach(marker => this.scene.remove(marker));
+                    this.cameraMarkers = [];
+                }
+                if (this.currentCameraMarker) {
+                    this.scene.remove(this.currentCameraMarker);
+                    this.currentCameraMarker = null;
+                }
+            }
+
+            createCameraGeometry() {
+                const geometry = new THREE.Group();
+                
+                const bodyGeometry = new THREE.BoxGeometry(0.3, 0.2, 0.4);
+                const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x4fc3f7 });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                geometry.add(body);
+
+                const lensGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.15, 16);
+                const lensMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+                const lens = new THREE.Mesh(lensGeometry, lensMaterial);
+                lens.rotation.x = Math.PI / 2;
+                lens.position.z = 0.275;
+                geometry.add(lens);
+
+                const frustumGeometry = new THREE.BufferGeometry();
+                const frustumVertices = new Float32Array([
+                    0, 0, 0,
+                    -0.3, -0.3, 0.8,
+                    0.3, -0.3, 0.8,
+                    0.3, 0.3, 0.8,
+                    -0.3, 0.3, 0.8,
+                ]);
+                const frustumIndices = new Uint16Array([
+                    0, 1, 0, 2, 0, 3, 0, 4,
+                    1, 2, 2, 3, 3, 4, 4, 1
+                ]);
+                frustumGeometry.setAttribute('position', new THREE.BufferAttribute(frustumVertices, 3));
+                frustumGeometry.setIndex(new THREE.BufferAttribute(frustumIndices, 1));
+                const frustumMaterial = new THREE.LineBasicMaterial({ color: 0x4fc3f7, opacity: 0.5, transparent: true });
+                const frustum = new THREE.LineSegments(frustumGeometry, frustumMaterial);
+                geometry.add(frustum);
+
+                return geometry;
+            }
+
+            visualizeTrajectory() {
+                this.clearTrajectory();
+
+                if (this.data.length === 0) return;
+
+                const points = this.data.poses.map(pose => pose.position);
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const material = new THREE.LineBasicMaterial({ 
+                    color: 0x81c784,
+                    linewidth: 2
+                });
+                this.trajectoryLine = new THREE.Line(geometry, material);
+                this.scene.add(this.trajectoryLine);
+
+                this.cameraMarkers = [];
+                const markerMaterial = new THREE.MeshBasicMaterial({ color: 0xffa726 });
+                
+                for (let i = 0; i < this.data.length; i += Math.max(1, Math.floor(this.data.length / 50))) {
+                    const pose = this.data.poses[i];
+                    const markerGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+                    const marker = new THREE.Mesh(markerGeometry, markerMaterial);
+                    marker.position.copy(pose.position);
+                    this.cameraMarkers.push(marker);
+                    if (this.showCameras) {
+                        this.scene.add(marker);
+                    }
+                }
+
+                this.currentCameraMarker = this.createCameraGeometry();
+                this.scene.add(this.currentCameraMarker);
+                this.updateCurrentCamera();
+
+                this.fitCameraToTrajectory();
+            }
+
+            updateCurrentCamera() {
+                if (!this.currentCameraMarker || this.data.length === 0) return;
+
+                const pose = this.data.getPose(this.currentFrame);
+                if (pose) {
+                    this.currentCameraMarker.position.copy(pose.position);
+                    this.currentCameraMarker.quaternion.copy(pose.quaternion);
+                    this.currentCameraMarker.visible = this.showCameras;
+                }
+            }
+
+            fitCameraToTrajectory() {
+                if (this.data.length === 0) return;
+
+                const box = new THREE.Box3();
+                this.data.poses.forEach(pose => box.expandByPoint(pose.position));
+
+                const center = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const fov = this.camera.fov * (Math.PI / 180);
+                let cameraDistance = maxDim / (2 * Math.tan(fov / 2));
+                cameraDistance *= 2;
+
+                this.camera.position.set(
+                    center.x + cameraDistance,
+                    center.y + cameraDistance,
+                    center.z + cameraDistance
+                );
+                this.controls.target.copy(center);
+                this.controls.update();
+            }
+
+            toggleCameras() {
+                this.showCameras = !this.showCameras;
+                if (this.cameraMarkers) {
+                    this.cameraMarkers.forEach(marker => marker.visible = this.showCameras);
+                }
+                if (this.currentCameraMarker) {
+                    this.currentCameraMarker.visible = this.showCameras;
+                }
+            }
+
+            toggleAxes() {
+                this.showAxes = !this.showAxes;
+                this.axesHelper.visible = this.showAxes;
+            }
+
+            resetView() {
+                this.fitCameraToTrajectory();
+            }
+
+            setFrame(frame) {
+                this.currentFrame = Math.max(this.startFrame, Math.min(this.endFrame, frame));
+                this.updateCurrentCamera();
+            }
+
+            play() {
+                this.playing = true;
+            }
+
+            pause() {
+                this.playing = false;
+            }
+
+            reset() {
+                this.currentFrame = this.startFrame;
+                this.playing = false;
+                this.updateCurrentCamera();
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+
+                if (this.playing && this.data.length > 0) {
+                    this.currentFrame++;
+                    if (this.currentFrame > this.endFrame) {
+                        this.currentFrame = this.startFrame;
+                    }
+                    this.updateCurrentCamera();
+                    app.updateUI();
+                }
+
+                this.controls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        class App {
+            constructor() {
+                this.visualizer = new TrajectoryVisualizer(document.getElementById('canvas-container'));
+                this.setupEventListeners();
+                this.animationFrameId = null;
+            }
+
+            setupEventListeners() {
+                document.getElementById('file-input').addEventListener('change', (e) => this.handleFileUpload(e));
+                document.getElementById('apply-range').addEventListener('click', () => this.applyRange());
+                document.getElementById('play-btn').addEventListener('click', () => this.play());
+                document.getElementById('pause-btn').addEventListener('click', () => this.pause());
+                document.getElementById('reset-btn').addEventListener('click', () => this.reset());
+                document.getElementById('frame-slider').addEventListener('input', (e) => this.onFrameSliderChange(e));
+                document.getElementById('speed-slider').addEventListener('input', (e) => this.onSpeedChange(e));
+                document.getElementById('show-cameras').addEventListener('click', () => this.toggleCameras());
+                document.getElementById('show-axes').addEventListener('click', () => this.toggleAxes());
+                document.getElementById('reset-view').addEventListener('click', () => this.visualizer.resetView());
+            }
+
+            showLoading() {
+                document.getElementById('loading').style.display = 'block';
+            }
+
+            hideLoading() {
+                document.getElementById('loading').style.display = 'none';
+            }
+
+            showError(message) {
+                const errorDiv = document.getElementById('error-message');
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                setTimeout(() => {
+                    errorDiv.style.display = 'none';
+                }, 5000);
+            }
+
+            async handleFileUpload(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                this.showLoading();
+                document.getElementById('file-info').textContent = `Loading: ${file.name}`;
+
+                try {
+                    const extension = file.name.split('.').pop().toLowerCase();
+                    
+                    if (extension === 'txt') {
+                        await this.parseTxtFile(file);
+                    } else if (extension === 'npy') {
+                        await this.parseNpyFile(file);
+                    } else {
+                        throw new Error('Unsupported file format. Please use .txt or .npy files.');
+                    }
+
+                    document.getElementById('file-info').textContent = `Loaded: ${file.name} (${this.visualizer.data.length} frames)`;
+                    this.initializeControls();
+                    this.visualizer.visualizeTrajectory();
+                    this.updateUI();
+                } catch (error) {
+                    console.error('Error loading file:', error);
+                    this.showError(`Error: ${error.message}`);
+                    document.getElementById('file-info').textContent = '';
+                } finally {
+                    this.hideLoading();
+                }
+            }
+
+            async parseTxtFile(file) {
+                const text = await file.text();
+                const lines = text.trim().split('\n');
+                
+                this.visualizer.data.clear();
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed.startsWith('#')) continue;
+
+                    const parts = trimmed.split(/[\s,]+/);
+                    
+                    if (parts.length >= 8) {
+                        const frameId = parseInt(parts[0]);
+                        const rigId = parseInt(parts[1]);
+                        const qw = parseFloat(parts[2]);
+                        const qx = parseFloat(parts[3]);
+                        const qy = parseFloat(parts[4]);
+                        const qz = parseFloat(parts[5]);
+                        const tx = parseFloat(parts[6]);
+                        const ty = parseFloat(parts[7]);
+                        const tz = parseFloat(parts[8]);
+
+                        if (!isNaN(frameId) && !isNaN(tx) && !isNaN(ty) && !isNaN(tz)) {
+                            this.visualizer.data.addPose(frameId, rigId, tx, ty, tz, qx, qy, qz, qw);
+                        }
+                    }
+                }
+
+                if (this.visualizer.data.length === 0) {
+                    throw new Error('No valid pose data found in file');
+                }
+            }
+
+            async parseNpyFile(file) {
+                const arrayBuffer = await file.arrayBuffer();
+                const npyData = this.parseNpy(arrayBuffer);
+                
+                this.visualizer.data.clear();
+
+                for (let i = 0; i < npyData.shape[0]; i++) {
+                    const frameId = i;
+                    const rigId = 0;
+                    
+                    let tx, ty, tz, qx, qy, qz, qw;
+                    
+                    if (npyData.shape[1] === 7) {
+                        tx = npyData.data[i * 7 + 0];
+                        ty = npyData.data[i * 7 + 1];
+                        tz = npyData.data[i * 7 + 2];
+                        qx = npyData.data[i * 7 + 3];
+                        qy = npyData.data[i * 7 + 4];
+                        qz = npyData.data[i * 7 + 5];
+                        qw = npyData.data[i * 7 + 6];
+                    } else if (npyData.shape[1] === 8) {
+                        tx = npyData.data[i * 8 + 1];
+                        ty = npyData.data[i * 8 + 2];
+                        tz = npyData.data[i * 8 + 3];
+                        qx = npyData.data[i * 8 + 4];
+                        qy = npyData.data[i * 8 + 5];
+                        qz = npyData.data[i * 8 + 6];
+                        qw = npyData.data[i * 8 + 7];
+                    } else {
+                        throw new Error(`Unsupported npy shape: ${npyData.shape}`);
+                    }
+
+                    this.visualizer.data.addPose(frameId, rigId, tx, ty, tz, qx, qy, qz, qw);
+                }
+
+                if (this.visualizer.data.length === 0) {
+                    throw new Error('No valid pose data found in file');
+                }
+            }
+
+            parseNpy(buffer) {
+                const view = new DataView(buffer);
+                const magic = String.fromCharCode(view.getUint8(0)) + 
+                              String.fromCharCode(view.getUint8(1)) +
+                              String.fromCharCode(view.getUint8(2)) +
+                              String.fromCharCode(view.getUint8(3)) +
+                              String.fromCharCode(view.getUint8(4)) +
+                              String.fromCharCode(view.getUint8(5));
+                
+                if (magic !== '\x93NUMPY') {
+                    throw new Error('Invalid NPY file format');
+                }
+
+                const majorVersion = view.getUint8(6);
+                const minorVersion = view.getUint8(7);
+                
+                let headerLen;
+                if (majorVersion === 1) {
+                    headerLen = view.getUint16(8, true);
+                } else if (majorVersion === 2) {
+                    headerLen = view.getUint32(8, true);
+                } else {
+                    throw new Error('Unsupported NPY version');
+                }
+
+                const headerOffset = majorVersion === 1 ? 10 : 12;
+                const headerBytes = new Uint8Array(buffer, headerOffset, headerLen);
+                const header = new TextDecoder().decode(headerBytes);
+                
+                const shapeMatch = header.match(/'shape':\s*\(([^)]+)\)/);
+                const dtypeMatch = header.match(/'descr':\s*'([^']+)'/);
+                
+                if (!shapeMatch || !dtypeMatch) {
+                    throw new Error('Could not parse NPY header');
+                }
+
+                const shape = shapeMatch[1].split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                const dtype = dtypeMatch[1];
+
+                const dataOffset = headerOffset + headerLen;
+                const dataView = new DataView(buffer, dataOffset);
+                
+                const totalElements = shape.reduce((a, b) => a * b, 1);
+                const data = new Float64Array(totalElements);
+
+                const littleEndian = dtype.startsWith('<');
+                const bytesPerElement = dtype.includes('f8') ? 8 : 4;
+
+                for (let i = 0; i < totalElements; i++) {
+                    if (bytesPerElement === 8) {
+                        data[i] = dataView.getFloat64(i * 8, littleEndian);
+                    } else {
+                        data[i] = dataView.getFloat32(i * 4, littleEndian);
+                    }
+                }
+
+                return { shape, dtype, data };
+            }
+
+            initializeControls() {
+                const length = this.visualizer.data.length;
+                
+                this.visualizer.startFrame = 0;
+                this.visualizer.endFrame = length - 1;
+                this.visualizer.currentFrame = 0;
+
+                document.getElementById('start-frame').value = 0;
+                document.getElementById('start-frame').max = length - 1;
+                document.getElementById('end-frame').value = length - 1;
+                document.getElementById('end-frame').max = length - 1;
+                
+                document.getElementById('frame-slider').max = length - 1;
+                document.getElementById('frame-slider').value = 0;
+                document.getElementById('frame-slider').disabled = false;
+
+                document.getElementById('play-btn').disabled = false;
+                document.getElementById('pause-btn').disabled = false;
+                document.getElementById('reset-btn').disabled = false;
+
+                const totalDistance = this.visualizer.data.calculateTotalDistance();
+                document.getElementById('total-frames').textContent = length;
+                document.getElementById('total-distance').textContent = totalDistance.toFixed(2) + ' m';
+            }
+
+            applyRange() {
+                const start = parseInt(document.getElementById('start-frame').value);
+                const end = parseInt(document.getElementById('end-frame').value);
+
+                if (start > end) {
+                    this.showError('Start frame must be less than or equal to end frame');
+                    return;
+                }
+
+                this.visualizer.startFrame = start;
+                this.visualizer.endFrame = end;
+                this.visualizer.currentFrame = start;
+                this.updateUI();
+            }
+
+            play() {
+                this.visualizer.play();
+                this.startPlaybackLoop();
+            }
+
+            pause() {
+                this.visualizer.pause();
+                this.stopPlaybackLoop();
+            }
+
+            reset() {
+                this.visualizer.reset();
+                this.stopPlaybackLoop();
+                this.updateUI();
+            }
+
+            startPlaybackLoop() {
+                if (this.animationFrameId) return;
+                
+                const fps = this.visualizer.playSpeed;
+                const interval = 1000 / fps;
+                let lastTime = performance.now();
+
+                const loop = (currentTime) => {
+                    if (!this.visualizer.playing) {
+                        this.animationFrameId = null;
+                        return;
+                    }
+
+                    const deltaTime = currentTime - lastTime;
+                    
+                    if (deltaTime >= interval) {
+                        lastTime = currentTime - (deltaTime % interval);
+                    }
+
+                    this.animationFrameId = requestAnimationFrame(loop);
+                };
+
+                this.animationFrameId = requestAnimationFrame(loop);
+            }
+
+            stopPlaybackLoop() {
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+            }
+
+            onFrameSliderChange(event) {
+                const frame = parseInt(event.target.value);
+                this.visualizer.setFrame(frame);
+                this.updateUI();
+            }
+
+            onSpeedChange(event) {
+                const speed = parseInt(event.target.value);
+                this.visualizer.playSpeed = speed;
+                document.getElementById('speed-value').textContent = speed;
+            }
+
+            toggleCameras() {
+                this.visualizer.toggleCameras();
+            }
+
+            toggleAxes() {
+                this.visualizer.toggleAxes();
+            }
+
+            updateUI() {
+                const currentFrame = this.visualizer.currentFrame;
+                const pose = this.visualizer.data.getPose(currentFrame);
+
+                document.getElementById('current-frame-display').textContent = currentFrame;
+                document.getElementById('frame-slider').value = currentFrame;
+
+                const progress = this.visualizer.data.length > 1
+                    ? ((currentFrame - this.visualizer.startFrame) / (this.visualizer.endFrame - this.visualizer.startFrame)) * 100
+                    : 0;
+                document.getElementById('progress-fill').style.width = progress + '%';
+
+                if (pose) {
+                    document.getElementById('pose-frame').textContent = pose.frameId;
+                    document.getElementById('pose-x').textContent = pose.position.x.toFixed(3);
+                    document.getElementById('pose-y').textContent = pose.position.y.toFixed(3);
+                    document.getElementById('pose-z').textContent = pose.position.z.toFixed(3);
+                    document.getElementById('pose-qw').textContent = pose.quaternion.w.toFixed(4);
+                    document.getElementById('pose-qx').textContent = pose.quaternion.x.toFixed(4);
+                    document.getElementById('pose-qy').textContent = pose.quaternion.y.toFixed(4);
+                    document.getElementById('pose-qz').textContent = pose.quaternion.z.toFixed(4);
+                }
+
+                const rangeDistance = this.visualizer.data.calculateRangeDistance(
+                    this.visualizer.startFrame,
+                    this.visualizer.endFrame
+                );
+                document.getElementById('range-distance').textContent = rangeDistance.toFixed(2) + ' m';
+            }
+        }
+
+        const app = new App();
+    </script>
+</body>
+</html>
